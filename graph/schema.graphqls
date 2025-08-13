@@ -1,0 +1,70 @@
+# GraphQL schema example
+#
+# https://gqlgen.com/getting-started/
+
+scalar DateTime
+scalar Any
+
+type Entity {
+  id: ID!
+  kind: Kind!
+  name: TimeBasedValue!
+  created: DateTime
+  terminated: DateTime
+  relationships(relationshipsFilter: RelationshipInput): [Relationship]!
+}
+
+type TimeBasedValue {
+  startTime: DateTime!
+  endTime: DateTime
+  value: Any!
+}
+
+type Kind {
+  major: String!
+  minor: String!
+}
+
+type Relationship {
+  id: ID
+  relatedEntityId: String!
+  name: String!
+  startTime: DateTime!
+  endTime: DateTime
+  direction: String!
+  entity: Entity!
+}
+
+input RelationshipInput {
+    id: String
+    relatedEntityId: String
+    name: String 
+    startTime: DateTime
+    endTime: DateTime
+    direction: String
+}
+
+input EntityInput {
+    id: ID
+    kind: KindInput
+    name: TimeBasedValueInput
+    created: DateTime
+    terminated: DateTime
+    relationships: RelationshipInput
+}
+
+input TimeBasedValueInput {
+    startTime: DateTime
+    endTime: DateTime
+    value: String
+}
+
+input KindInput {
+    major: String
+    minor: String
+}
+
+type Query {
+  # Optimized single entrypoint
+  entities(filter: EntityInput): [Entity]!
+}
