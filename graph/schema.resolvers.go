@@ -10,36 +10,40 @@ import (
 	"time"
 
 	"graphql_nexoan/graph/model"
+
+	"github.com/neo4j/neo4j-go-driver/v5/neo4j/dbtype"
 )
 
 // Entities is the resolver for the entities field.
 // Queries using the filter fields and returns a list of Entity
 func (r *queryResolver) Entities(ctx context.Context, filter *model.EntityInput) ([]*model.Entity, error) {
+	// Create a session directly to avoid the RunQuery issue
+	session := r.DB.NewSession(ctx)
+	defer session.Close(ctx)
+
+	// Build the query with proper filtering
 	query := `
 		MATCH (e)
 		WHERE ($id IS NULL OR e.Id = $id)
-		  AND ($kindMajor IS NULL OR e.kind_major = $kindMajor)
-		  AND ($kindMinor IS NULL OR e.kind_minor = $kindMinor)
-		  AND ($nameValue IS NULL OR e.name_value = $nameValue)
-		  AND ($nameStartTime IS NULL OR e.name_start_time = $nameStartTime)
-		  AND ($nameEndTime IS NULL OR e.name_end_time = $nameEndTime)
-		  AND ($created IS NULL OR e.created = $created)
-		  AND ($terminated IS NULL OR e.terminated = $terminated)
+		  AND ($majorKind IS NULL OR $majorKind IN labels(e))
+		  AND ($minorKind IS NULL OR e.MinorKind = $minorKind)
+		  AND ($name IS NULL OR e.Name = $name)
+		  AND ($created IS NULL OR e.Created = $created)
+		  AND ($terminated IS NULL OR e.Terminated = $terminated)
 		RETURN e
 	`
 
+	// Build parameters map
 	params := map[string]interface{}{
-		"id":            nilIfEmpty(filter.ID),
-		"kindMajor":     nilIfEmpty(safeKindMajor(filter)),
-		"kindMinor":     nilIfEmpty(safeKindMinor(filter)),
-		"nameValue":     nilIfEmpty(safeNameValue(filter)),
-		"nameStartTime": nilIfEmpty(safeNameStartTime(filter)),
-		"nameEndTime":   nilIfEmpty(safeNameEndTime(filter)),
-		"created":       nilIfEmpty(filter.Created),
-		"terminated":    nilIfEmpty(filter.Terminated),
+		"id":         nilIfEmpty(filter.ID),
+		"majorKind":  nilIfEmpty(safeKindMajor(filter)),
+		"minorKind":  nilIfEmpty(safeKindMinor(filter)),
+		"name":       nilIfEmpty(safeNameValue(filter)),
+		"created":    nilIfEmpty(filter.Created),
+		"terminated": nilIfEmpty(filter.Terminated),
 	}
 
-	result, err := r.DB.RunQuery(ctx, query, params)
+	result, err := session.Run(ctx, query, params)
 	if err != nil {
 		return nil, fmt.Errorf("neo4j query failed: %w", err)
 	}
@@ -47,9 +51,27 @@ func (r *queryResolver) Entities(ctx context.Context, filter *model.EntityInput)
 	var entities []*model.Entity
 	for result.Next(ctx) {
 		record := result.Record()
-		node := record.Values[0].(map[string]interface{})
-		entities = append(entities, mapEntityNode(node))
+		if len(record.Values) > 0 {
+			// Handle Neo4j Node type properly
+			if node, ok := record.Values[0].(dbtype.Node); ok {
+				// Convert Node properties to map[string]interface{}
+				props := make(map[string]interface{})
+				for key, value := range node.Props {
+					props[key] = value
+				}
+				// Add the ID from the Node
+				//props["Id"] = node.ElementId
+				// Add the major kind from the node labels
+				if len(node.Labels) > 0 {
+					props["MajorKind"] = node.Labels[0]
+				}
+				entities = append(entities, mapEntityNode(props))
+			} else {
+				fmt.Printf("Warning: Record is not a Node: %T\n", record.Values[0])
+			}
+		}
 	}
+
 	return entities, nil
 }
 
@@ -232,17 +254,17 @@ func toTimePtr(v any) *time.Time {
 
 func mapEntityNode(props map[string]interface{}) *model.Entity {
 	return &model.Entity{
-		ID: toString(props["id"]),
+		ID: toString(props["Id"]),
 		Kind: &model.Kind{
-			Major: toString(props["kind_major"]),
-			Minor: toString(props["kind_minor"]),
+			Major: toString(props["MajorKind"]),
+			Minor: toString(props["MinorKind"]),
 		},
 		Name: &model.TimeBasedValue{
-			Value:     props["name_value"],
-			StartTime: toString(props["name_start_time"]),
-			EndTime:   toStringPtr(props["name_end_time"]),
+			Value:     props["Name"],
+			StartTime: toString(props["Created"]),
+			EndTime:   nil, // No end time in your data
 		},
-		Created:    toStringPtr(props["created"]),
-		Terminated: toStringPtr(props["terminated"]),
+		Created:    toStringPtr(props["Created"]),
+		Terminated: toStringPtr(props["Terminated"]),
 	}
 }

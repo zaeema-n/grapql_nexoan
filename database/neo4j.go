@@ -41,3 +41,8 @@ func (c *Neo4jClient) RunQuery(ctx context.Context, query string, params map[str
 	defer session.Close(ctx)
 	return session.Run(ctx, query, params)
 }
+
+// NewSession creates a new session for direct query execution
+func (c *Neo4jClient) NewSession(ctx context.Context) neo4j.SessionWithContext {
+	return c.driver.NewSession(ctx, neo4j.SessionConfig{})
+}

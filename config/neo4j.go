@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log"
 	"os"
 )
 
@@ -25,6 +26,12 @@ func NewNeo4jConfig() *Neo4jConfig {
 	if password == "" {
 		password = "password"
 	}
+
+	log.Printf("Neo4jConfig: %+v", Neo4jConfig{
+		URI:      uri,
+		Username: username,
+		Password: password,
+	})
 
 	return &Neo4jConfig{
 		URI:      uri,
