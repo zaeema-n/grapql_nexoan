@@ -15,7 +15,7 @@ To run the graphql server, run the following,
 go run server.go
 ```
 
-Try running the following wuery in graphiql
+Try running the following query in graphiql to test the Entities query
 
 ```bash
 query {
@@ -25,6 +25,34 @@ query {
     kind { major minor }
     created
     terminated
+  }
+}
+```
+
+Try Try running the following query in graphiql to test the Entities query with relationships
+
+```bash
+query {
+  entities(filter: {id:"gov_01"}) {
+    id
+    name { value }
+    kind {minor major}
+    created
+    terminated
+    relationships (relationshipsFilter: {name: "AS_DOCUMENT"}) {
+      id
+      name
+      relatedEntityId
+      startTime
+      endTime
+      direction
+      entity{
+        id
+        name{
+          value
+        }
+      }
+    }
   }
 }
 ```

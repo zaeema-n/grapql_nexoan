@@ -59,9 +59,6 @@ func (r *queryResolver) Entities(ctx context.Context, filter *model.EntityInput)
 				for key, value := range node.Props {
 					props[key] = value
 				}
-				// Add the ID from the Node
-				//props["Id"] = node.ElementId
-				// Add the major kind from the node labels
 				if len(node.Labels) > 0 {
 					props["MajorKind"] = node.Labels[0]
 				}
@@ -78,11 +75,15 @@ func (r *queryResolver) Entities(ctx context.Context, filter *model.EntityInput)
 // Relationships is the resolver for the relationships field.
 // Runs for each Entity- to fetch the relationships and related entity ids and returns a list of Relationship
 func (r *entityResolver) Relationships(ctx context.Context, obj *model.Entity, relationshipsFilter *model.RelationshipInput) ([]*model.Relationship, error) {
+	// Create a session directly to avoid the RunQuery issue
+	session := r.DB.NewSession(ctx)
+	defer session.Close(ctx)
+
 	query := `
-		MATCH (e:Entity {id: $entityId})-[rel:RELATES_TO]->(related:Entity)
-		WHERE ($relId IS NULL OR rel.id = $relId)
-		  AND ($relName IS NULL OR rel.name = $relName)
-		  AND ($relatedEntityId IS NULL OR related.id = $relatedEntityId)
+		MATCH (e {Id: $entityId})-[rel]->(related)
+		WHERE ($relId IS NULL OR rel.Id = $relId)
+		  AND ($relName IS NULL OR type(rel) = $relName)
+		  AND ($relatedEntityId IS NULL OR related.Id = $relatedEntityId)
 		RETURN rel, related
 	`
 
@@ -93,7 +94,10 @@ func (r *entityResolver) Relationships(ctx context.Context, obj *model.Entity, r
 		"relatedEntityId": nilIfEmpty(safeRelatedEntityId(relationshipsFilter)),
 	}
 
-	result, err := r.DB.RunQuery(ctx, query, params)
+	fmt.Printf("Running query: %s\n", query)
+	fmt.Printf("With params: %+v\n", params)
+
+	result, err := session.Run(ctx, query, params)
 	if err != nil {
 		return nil, fmt.Errorf("neo4j query failed: %w", err)
 	}
@@ -101,16 +105,55 @@ func (r *entityResolver) Relationships(ctx context.Context, obj *model.Entity, r
 	var rels []*model.Relationship
 	for result.Next(ctx) {
 		rec := result.Record()
-		relNode := rec.Values[0].(map[string]interface{})
-		relatedNode := rec.Values[1].(map[string]interface{})
+
+		// Handle Neo4j types properly
+		var relNode map[string]interface{}
+		var relatedNode map[string]interface{}
+		var relName string
+
+		// Extract relationship data
+		if rel, ok := rec.Values[0].(dbtype.Relationship); ok {
+			relName = rel.Type
+			// Convert relationship properties to map
+			relNode = make(map[string]interface{})
+			for key, value := range rel.Props {
+				relNode[key] = value
+			}
+			// Add the elementId as Id if no Id property exists
+			if _, exists := relNode["Id"]; !exists {
+				relNode["Id"] = rel.ElementId
+			}
+		} else {
+			return nil, fmt.Errorf("failed to extract relationship from result")
+		}
+
+		// Extract related entity data
+		if related, ok := rec.Values[1].(dbtype.Node); ok {
+			// Convert node properties to map
+			relatedNode = make(map[string]interface{})
+			for key, value := range related.Props {
+				relatedNode[key] = value
+			}
+			// Add the elementId as Id if no Id property exists
+			if _, exists := relatedNode["Id"]; !exists {
+				relatedNode["Id"] = related.ElementId
+			}
+			// Add the major kind from the node labels
+			if len(related.Labels) > 0 {
+				relatedNode["MajorKind"] = related.Labels[0]
+			}
+		} else {
+			return nil, fmt.Errorf("failed to extract related entity from result")
+		}
 
 		rels = append(rels, &model.Relationship{
-			ID:        toStringPtr(relNode["id"]),
-			Name:      toString(relNode["name"]),
-			StartTime: toString(relNode["start_time"]),
-			EndTime:   toStringPtr(relNode["end_time"]),
-			Direction: toString(relNode["direction"]),
-			Entity:    mapEntityNode(relatedNode),
+			ID:              toStringPtr(relNode["Id"]),
+			RelatedEntityID: toString(relatedNode["Id"]),
+			Name:            relName,
+			StartTime:       toString(relNode["Created"]),
+			EndTime:         toStringPtr(relNode["Terminated"]),
+			Direction:       "OUTGOING", // Since we're going from e to related
+			Entity:          mapEntityNode(relatedNode),
 		})
 	}
 	return rels, nil
