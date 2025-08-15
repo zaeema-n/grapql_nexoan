@@ -32,7 +32,7 @@ type Relationship {
   startTime: DateTime!
   endTime: DateTime
   direction: String!
-  entity: Entity!
+  entities(entitiesFilter: EntityInput): [Entity]!
 }
 
 input RelationshipInput {
@@ -66,5 +66,5 @@ input KindInput {
 
 type Query {
   # Optimized single entrypoint
-  entities(filter: EntityInput): [Entity]!
+  entities(entitiesFilter: EntityInput): [Entity]!
 }

@@ -7,73 +7,13 @@ package graph
 import (
 	"context"
 	"fmt"
-	"time"
-
 	"graphql_nexoan/graph/model"
+	"time"
 
 	"github.com/neo4j/neo4j-go-driver/v5/neo4j/dbtype"
 )
 
-// Entities is the resolver for the entities field.
-// Queries using the filter fields and returns a list of Entity
-func (r *queryResolver) Entities(ctx context.Context, filter *model.EntityInput) ([]*model.Entity, error) {
-	// Create a session directly to avoid the RunQuery issue
-	session := r.DB.NewSession(ctx)
-	defer session.Close(ctx)
-
-	// Build the query with proper filtering
-	query := `
-		MATCH (e)
-		WHERE ($id IS NULL OR e.Id = $id)
-		  AND ($majorKind IS NULL OR $majorKind IN labels(e))
-		  AND ($minorKind IS NULL OR e.MinorKind = $minorKind)
-		  AND ($name IS NULL OR e.Name = $name)
-		  AND ($created IS NULL OR e.Created = $created)
-		  AND ($terminated IS NULL OR e.Terminated = $terminated)
-		RETURN e
-	`
-
-	// Build parameters map
-	params := map[string]interface{}{
-		"id":         nilIfEmpty(filter.ID),
-		"majorKind":  nilIfEmpty(safeKindMajor(filter)),
-		"minorKind":  nilIfEmpty(safeKindMinor(filter)),
-		"name":       nilIfEmpty(safeNameValue(filter)),
-		"created":    nilIfEmpty(filter.Created),
-		"terminated": nilIfEmpty(filter.Terminated),
-	}
-
-	result, err := session.Run(ctx, query, params)
-	if err != nil {
-		return nil, fmt.Errorf("neo4j query failed: %w", err)
-	}
-
-	var entities []*model.Entity
-	for result.Next(ctx) {
-		record := result.Record()
-		if len(record.Values) > 0 {
-			// Handle Neo4j Node type properly
-			if node, ok := record.Values[0].(dbtype.Node); ok {
-				// Convert Node properties to map[string]interface{}
-				props := make(map[string]interface{})
-				for key, value := range node.Props {
-					props[key] = value
-				}
-				if len(node.Labels) > 0 {
-					props["MajorKind"] = node.Labels[0]
-				}
-				entities = append(entities, mapEntityNode(props))
-			} else {
-				fmt.Printf("Warning: Record is not a Node: %T\n", record.Values[0])
-			}
-		}
-	}
-
-	return entities, nil
-}
-
 // Relationships is the resolver for the relationships field.
-// Runs for each Entity- to fetch the relationships and related entity ids and returns a list of Relationship
 func (r *entityResolver) Relationships(ctx context.Context, obj *model.Entity, relationshipsFilter *model.RelationshipInput) ([]*model.Relationship, error) {
 	// Create a session directly to avoid the RunQuery issue
 	session := r.DB.NewSession(ctx)
@@ -94,7 +34,7 @@ func (r *entityResolver) Relationships(ctx context.Context, obj *model.Entity, r
 		"relatedEntityId": nilIfEmpty(safeRelatedEntityId(relationshipsFilter)),
 	}
 
-	fmt.Printf("Running query: %s\n", query)
+	fmt.Printf("Running Relationships query: %s\n", query)
 	fmt.Printf("With params: %+v\n", params)
 
 	result, err := session.Run(ctx, query, params)
@@ -153,34 +93,101 @@ func (r *entityResolver) Relationships(ctx context.Context, obj *model.Entity, r
 			StartTime:       toString(relNode["Created"]),
 			EndTime:         toStringPtr(relNode["Terminated"]),
 			Direction:       "OUTGOING", // Since we're going from e to related
-			Entity:          mapEntityNode(relatedNode),
+
+			// Instead of setting Entity here, we'll let the Entities resolver handle it
 		})
 	}
 	return rels, nil
 }
 
-// Entity is the resolver for the entity field.
-// Runs for each Relationship- to fetch the related entity
-func (r *relationshipResolver) Entity(ctx context.Context, obj *model.Relationship) (*model.Entity, error) {
-	// The entity is already set in Relationships, so just return it
-	if obj.Entity != nil {
-		return obj.Entity, nil
+// Entities is the resolver for the entities field.
+// Queries using the filter fields and returns a list of Entity
+func (r *queryResolver) Entities(ctx context.Context, entitiesFilter *model.EntityInput) ([]*model.Entity, error) {
+	// Create a session directly to avoid the RunQuery issue
+	session := r.DB.NewSession(ctx)
+	defer session.Close(ctx)
+
+	// Build the query with proper filtering
+	query := `
+		MATCH (e)
+		WHERE ($id IS NULL OR e.Id = $id)
+		  AND ($majorKind IS NULL OR $majorKind IN labels(e))
+		  AND ($minorKind IS NULL OR e.MinorKind = $minorKind)
+		  AND ($name IS NULL OR e.Name = $name)
+		  AND ($created IS NULL OR e.Created = $created)
+		  AND ($terminated IS NULL OR e.Terminated = $terminated)
+		RETURN e
+	`
+
+	// Build parameters map
+	params := map[string]interface{}{
+		"id":         nilIfEmpty(entitiesFilter.ID),
+		"majorKind":  nilIfEmpty(safeKindMajor(entitiesFilter)),
+		"minorKind":  nilIfEmpty(safeKindMinor(entitiesFilter)),
+		"name":       nilIfEmpty(safeNameValue(entitiesFilter)),
+		"created":    nilIfEmpty(entitiesFilter.Created),
+		"terminated": nilIfEmpty(entitiesFilter.Terminated),
 	}
 
-	// Optional: If you want to fetch from Neo4j in case it's missing
-	query := `MATCH (e:Entity {id: $id}) RETURN e`
-	params := map[string]interface{}{"id": obj.RelatedEntityID}
+	fmt.Printf("Running Entities query: %s\n", query)
+	fmt.Printf("With params: %+v\n", params)
 
-	result, err := r.DB.RunQuery(ctx, query, params)
+	result, err := session.Run(ctx, query, params)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("neo4j query failed: %w", err)
 	}
-	if result.Next(ctx) {
+
+	var entities []*model.Entity
+	for result.Next(ctx) {
 		record := result.Record()
-		node := record.Values[0].(map[string]interface{})
-		return mapEntityNode(node), nil
+		if len(record.Values) > 0 {
+			// Handle Neo4j Node type properly
+			if node, ok := record.Values[0].(dbtype.Node); ok {
+				// Convert Node properties to map[string]interface{}
+				props := make(map[string]interface{})
+				for key, value := range node.Props {
+					props[key] = value
+				}
+				if len(node.Labels) > 0 {
+					props["MajorKind"] = node.Labels[0]
+				}
+				entities = append(entities, mapEntityNode(props))
+			} else {
+				fmt.Printf("Warning: Record is not a Node: %T\n", record.Values[0])
+			}
+		}
 	}
-	return nil, nil
+
+	return entities, nil
+}
+
+// Entities is the resolver for the entities field.
+func (r *relationshipResolver) Entities(ctx context.Context, obj *model.Relationship, entitiesFilter *model.EntityInput) ([]*model.Entity, error) {
+	// Create a filter that includes the related entity ID
+	entityFilter := &model.EntityInput{
+		ID: &obj.RelatedEntityID,
+	}
+
+	// If additional filters are provided, merge them
+	if entitiesFilter != nil {
+		if entitiesFilter.Kind != nil {
+			entityFilter.Kind = entitiesFilter.Kind
+		}
+		if entitiesFilter.Name != nil {
+			entityFilter.Name = entitiesFilter.Name
+		}
+		if entitiesFilter.Created != nil {
+			entityFilter.Created = entitiesFilter.Created
+		}
+		if entitiesFilter.Terminated != nil {
+			entityFilter.Terminated = entitiesFilter.Terminated
+		}
+	}
+
+	fmt.Printf("Running Entities filter: %s\n", *entityFilter.ID)
+
+	// Call the main Entities resolver with the merged filter
+	return r.Query().Entities(ctx, entityFilter)
 }
 
 // Entity returns EntityResolver implementation.
@@ -196,15 +203,19 @@ type entityResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
 type relationshipResolver struct{ *Resolver }
 
-// ===== HELPERS =====
+// !!! WARNING !!!
+// The code below was going to be deleted when updating resolvers. It has been copied here so you have
+// one last chance to move it out of harms way if you want. There are two reasons this happens:
+//  - When renaming or deleting a resolver the old code will be put in here. You can safely delete
+//    it when you're done.
+//  - You have helper methods in this file. Move them out to keep these resolver files clean.
+
 func nilIfEmpty(s *string) any {
 	if s == nil || *s == "" {
 		return nil
 	}
 	return *s
 }
-
-// Generic safe field accessor that works with any nested field
 func safeField[T any, R any](obj *T, accessor func(*T) R) R {
 	if obj == nil {
 		var zero R
@@ -212,71 +223,60 @@ func safeField[T any, R any](obj *T, accessor func(*T) R) R {
 	}
 	return accessor(obj)
 }
-
-// Safe accessor functions that handle nested nil checks
 func safeKindMajor(filter *model.EntityInput) *string {
 	if filter == nil || filter.Kind == nil {
 		return nil
 	}
 	return filter.Kind.Major
 }
-
 func safeKindMinor(filter *model.EntityInput) *string {
 	if filter == nil || filter.Kind == nil {
 		return nil
 	}
 	return filter.Kind.Minor
 }
-
 func safeNameValue(filter *model.EntityInput) *string {
 	if filter == nil || filter.Name == nil {
 		return nil
 	}
 	return filter.Name.Value
 }
-
 func safeNameStartTime(filter *model.EntityInput) *string {
 	if filter == nil || filter.Name == nil {
 		return nil
 	}
 	return filter.Name.StartTime
 }
-
 func safeNameEndTime(filter *model.EntityInput) *string {
 	if filter == nil || filter.Name == nil {
 		return nil
 	}
 	return filter.Name.EndTime
 }
-
 func safeRelId(filter *model.RelationshipInput) *string {
 	if filter == nil {
 		return nil
 	}
 	return filter.ID
 }
-
 func safeRelName(filter *model.RelationshipInput) *string {
 	if filter == nil {
 		return nil
 	}
 	return filter.Name
 }
-
 func safeRelatedEntityId(filter *model.RelationshipInput) *string {
 	if filter == nil {
 		return nil
 	}
 	return filter.RelatedEntityID
 }
-
 func toString(v any) string {
 	if v == nil {
 		return ""
 	}
 	return fmt.Sprintf("%v", v)
 }
-
 func toStringPtr(v any) *string {
 	if v == nil {
 		return nil
@@ -284,7 +284,6 @@ func toStringPtr(v any) *string {
 	s := toString(v)
 	return &s
 }
-
 func toTimePtr(v any) *time.Time {
 	if v == nil {
 		return nil
@@ -294,7 +293,6 @@ func toTimePtr(v any) *time.Time {
 	}
 	return nil
 }
-
 func mapEntityNode(props map[string]interface{}) *model.Entity {
 	return &model.Entity{
 		ID: toString(props["Id"]),

@@ -165,5 +165,5 @@ models:
 
   Relationship:
     fields:
-      entity:
+      entities:
         resolver: true

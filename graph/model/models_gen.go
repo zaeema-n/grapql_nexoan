@@ -34,13 +34,13 @@ type Query struct {
 }
 
 type Relationship struct {
-	ID              *string `json:"id,omitempty"`
-	RelatedEntityID string  `json:"relatedEntityId"`
-	Name            string  `json:"name"`
-	StartTime       string  `json:"startTime"`
-	EndTime         *string `json:"endTime,omitempty"`
-	Direction       string  `json:"direction"`
-	Entity          *Entity `json:"entity"`
+	ID              *string   `json:"id,omitempty"`
+	RelatedEntityID string    `json:"relatedEntityId"`
+	Name            string    `json:"name"`
+	StartTime       string    `json:"startTime"`
+	EndTime         *string   `json:"endTime,omitempty"`
+	Direction       string    `json:"direction"`
+	Entities        []*Entity `json:"entities"`
 }
 
 type RelationshipInput struct {

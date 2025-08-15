@@ -63,13 +63,13 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
-		Entities func(childComplexity int, filter *model.EntityInput) int
+		Entities func(childComplexity int, entitiesFilter *model.EntityInput) int
 	}
 
 	Relationship struct {
 		Direction       func(childComplexity int) int
 		EndTime         func(childComplexity int) int
-		Entity          func(childComplexity int) int
+		Entities        func(childComplexity int, entitiesFilter *model.EntityInput) int
 		ID              func(childComplexity int) int
 		Name            func(childComplexity int) int
 		RelatedEntityID func(childComplexity int) int
@@ -87,10 +87,10 @@ type EntityResolver interface {
 	Relationships(ctx context.Context, obj *model.Entity, relationshipsFilter *model.RelationshipInput) ([]*model.Relationship, error)
 }
 type QueryResolver interface {
-	Entities(ctx context.Context, filter *model.EntityInput) ([]*model.Entity, error)
+	Entities(ctx context.Context, entitiesFilter *model.EntityInput) ([]*model.Entity, error)
 }
 type RelationshipResolver interface {
-	Entity(ctx context.Context, obj *model.Relationship) (*model.Entity, error)
+	Entities(ctx context.Context, obj *model.Relationship, entitiesFilter *model.EntityInput) ([]*model.Entity, error)
 }
 
 type executableSchema struct {
@@ -183,7 +183,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Query.Entities(childComplexity, args["filter"].(*model.EntityInput)), true
+		return e.complexity.Query.Entities(childComplexity, args["entitiesFilter"].(*model.EntityInput)), true
 
 	case "Relationship.direction":
 		if e.complexity.Relationship.Direction == nil {
@@ -199,12 +199,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.Relationship.EndTime(childComplexity), true
 
-	case "Relationship.entity":
-		if e.complexity.Relationship.Entity == nil {
+	case "Relationship.entities":
+		if e.complexity.Relationship.Entities == nil {
 			break
 		}
 
-		return e.complexity.Relationship.Entity(childComplexity), true
+		args, err := ec.field_Relationship_entities_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Relationship.Entities(childComplexity, args["entitiesFilter"].(*model.EntityInput)), true
 
 	case "Relationship.id":
 		if e.complexity.Relationship.ID == nil {
@@ -393,11 +398,22 @@ func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs
 func (ec *executionContext) field_Query_entities_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "filter", ec.unmarshalOEntityInput2ᚖgraphql_nexoanᚋgraphᚋmodelᚐEntityInput)
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "entitiesFilter", ec.unmarshalOEntityInput2ᚖgraphql_nexoanᚋgraphᚋmodelᚐEntityInput)
 	if err != nil {
 		return nil, err
 	}
-	args["filter"] = arg0
+	args["entitiesFilter"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Relationship_entities_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "entitiesFilter", ec.unmarshalOEntityInput2ᚖgraphql_nexoanᚋgraphᚋmodelᚐEntityInput)
+	if err != nil {
+		return nil, err
+	}
+	args["entitiesFilter"] = arg0
 	return args, nil
 }
 
@@ -732,8 +748,8 @@ func (ec *executionContext) fieldContext_Entity_relationships(ctx context.Contex
 				return ec.fieldContext_Relationship_endTime(ctx, field)
 			case "direction":
 				return ec.fieldContext_Relationship_direction(ctx, field)
-			case "entity":
-				return ec.fieldContext_Relationship_entity(ctx, field)
+			case "entities":
+				return ec.fieldContext_Relationship_entities(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Relationship", field.Name)
 		},
@@ -854,7 +870,7 @@ func (ec *executionContext) _Query_entities(ctx context.Context, field graphql.C
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().Entities(rctx, fc.Args["filter"].(*model.EntityInput))
+		return ec.resolvers.Query().Entities(rctx, fc.Args["entitiesFilter"].(*model.EntityInput))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1298,8 +1314,8 @@ func (ec *executionContext) fieldContext_Relationship_direction(_ context.Contex
 	return fc, nil
 }
 
-func (ec *executionContext) _Relationship_entity(ctx context.Context, field graphql.CollectedField, obj *model.Relationship) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_Relationship_entity(ctx, field)
+func (ec *executionContext) _Relationship_entities(ctx context.Context, field graphql.CollectedField, obj *model.Relationship) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Relationship_entities(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -1312,7 +1328,7 @@ func (ec *executionContext) _Relationship_entity(ctx context.Context, field grap
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Relationship().Entity(rctx, obj)
+		return ec.resolvers.Relationship().Entities(rctx, obj, fc.Args["entitiesFilter"].(*model.EntityInput))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1324,12 +1340,12 @@ func (ec *executionContext) _Relationship_entity(ctx context.Context, field grap
 		}
 		return graphql.Null
 	}
-	res := resTmp.(*model.Entity)
+	res := resTmp.([]*model.Entity)
 	fc.Result = res
-	return ec.marshalNEntity2ᚖgraphql_nexoanᚋgraphᚋmodelᚐEntity(ctx, field.Selections, res)
+	return ec.marshalNEntity2ᚕᚖgraphql_nexoanᚋgraphᚋmodelᚐEntity(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Relationship_entity(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Relationship_entities(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Relationship",
 		Field:      field,
@@ -1352,6 +1368,17 @@ func (ec *executionContext) fieldContext_Relationship_entity(_ context.Context, 
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Entity", field.Name)
 		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Relationship_entities_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -3883,7 +3910,7 @@ func (ec *executionContext) _Relationship(ctx context.Context, sel ast.Selection
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
-		case "entity":
+		case "entities":
 			field := field
 
 			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
@@ -3892,7 +3919,7 @@ func (ec *executionContext) _Relationship(ctx context.Context, sel ast.Selection
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
-				res = ec._Relationship_entity(ctx, field, obj)
+				res = ec._Relationship_entities(ctx, field, obj)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -4377,10 +4404,6 @@ func (ec *executionContext) marshalNDateTime2string(ctx context.Context, sel ast
 	return res
 }
 
-func (ec *executionContext) marshalNEntity2graphql_nexoanᚋgraphᚋmodelᚐEntity(ctx context.Context, sel ast.SelectionSet, v model.Entity) graphql.Marshaler {
-	return ec._Entity(ctx, sel, &v)
-}
-
 func (ec *executionContext) marshalNEntity2ᚕᚖgraphql_nexoanᚋgraphᚋmodelᚐEntity(ctx context.Context, sel ast.SelectionSet, v []*model.Entity) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
@@ -4417,16 +4440,6 @@ func (ec *executionContext) marshalNEntity2ᚕᚖgraphql_nexoanᚋgraphᚋmodel�
 	wg.Wait()
 
 	return ret
-}
-
-func (ec *executionContext) marshalNEntity2ᚖgraphql_nexoanᚋgraphᚋmodelᚐEntity(ctx context.Context, sel ast.SelectionSet, v *model.Entity) graphql.Marshaler {
-	if v == nil {
-		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
-		}
-		return graphql.Null
-	}
-	return ec._Entity(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNID2string(ctx context.Context, v any) (string, error) {
