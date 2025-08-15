@@ -6,33 +6,33 @@ scalar DateTime
 scalar Any
 
 type Entity {
-  id: ID!
-  kind: Kind!
-  name: TimeBasedValue!
+  id: ID
+  kind: Kind
+  name: TimeBasedValue
   created: DateTime
   terminated: DateTime
-  relationships(relationshipsFilter: RelationshipInput): [Relationship]!
+  relationships(relationshipsFilter: RelationshipInput): [Relationship]
 }
 
 type TimeBasedValue {
-  startTime: DateTime!
+  startTime: DateTime
   endTime: DateTime
-  value: Any!
+  value: Any
 }
 
 type Kind {
-  major: String!
-  minor: String!
+  major: String
+  minor: String
 }
 
 type Relationship {
   id: ID
-  relatedEntityId: String!
-  name: String!
-  startTime: DateTime!
+  relatedEntityId: String
+  name: String
+  startTime: DateTime
   endTime: DateTime
-  direction: String!
-  entities(entitiesFilter: EntityInput): [Entity]!
+  direction: String
+  entities(entitiesFilter: EntityInput): [Entity]
 }
 
 input RelationshipInput {
@@ -66,5 +66,5 @@ input KindInput {
 
 type Query {
   # Optimized single entrypoint
-  entities(entitiesFilter: EntityInput): [Entity]!
+  entities(entitiesFilter: EntityInput): [Entity]
 }

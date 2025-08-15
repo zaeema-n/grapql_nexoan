@@ -3,12 +3,12 @@
 package model
 
 type Entity struct {
-	ID            string          `json:"id"`
-	Kind          *Kind           `json:"kind"`
-	Name          *TimeBasedValue `json:"name"`
+	ID            *string         `json:"id,omitempty"`
+	Kind          *Kind           `json:"kind,omitempty"`
+	Name          *TimeBasedValue `json:"name,omitempty"`
 	Created       *string         `json:"created,omitempty"`
 	Terminated    *string         `json:"terminated,omitempty"`
-	Relationships []*Relationship `json:"relationships"`
+	Relationships []*Relationship `json:"relationships,omitempty"`
 }
 
 type EntityInput struct {
@@ -21,8 +21,8 @@ type EntityInput struct {
 }
 
 type Kind struct {
-	Major string `json:"major"`
-	Minor string `json:"minor"`
+	Major *string `json:"major,omitempty"`
+	Minor *string `json:"minor,omitempty"`
 }
 
 type KindInput struct {
@@ -35,12 +35,12 @@ type Query struct {
 
 type Relationship struct {
 	ID              *string   `json:"id,omitempty"`
-	RelatedEntityID string    `json:"relatedEntityId"`
-	Name            string    `json:"name"`
-	StartTime       string    `json:"startTime"`
+	RelatedEntityID *string   `json:"relatedEntityId,omitempty"`
+	Name            *string   `json:"name,omitempty"`
+	StartTime       *string   `json:"startTime,omitempty"`
 	EndTime         *string   `json:"endTime,omitempty"`
-	Direction       string    `json:"direction"`
-	Entities        []*Entity `json:"entities"`
+	Direction       *string   `json:"direction,omitempty"`
+	Entities        []*Entity `json:"entities,omitempty"`
 }
 
 type RelationshipInput struct {
@@ -53,9 +53,9 @@ type RelationshipInput struct {
 }
 
 type TimeBasedValue struct {
-	StartTime string  `json:"startTime"`
+	StartTime *string `json:"startTime,omitempty"`
 	EndTime   *string `json:"endTime,omitempty"`
-	Value     any     `json:"value"`
+	Value     any     `json:"value,omitempty"`
 }
 
 type TimeBasedValueInput struct {

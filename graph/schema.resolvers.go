@@ -8,7 +8,6 @@ import (
 	"context"
 	"fmt"
 	"graphql_nexoan/graph/model"
-	"time"
 
 	"github.com/neo4j/neo4j-go-driver/v5/neo4j/dbtype"
 )
@@ -88,11 +87,11 @@ func (r *entityResolver) Relationships(ctx context.Context, obj *model.Entity, r
 
 		rels = append(rels, &model.Relationship{
 			ID:              toStringPtr(relNode["Id"]),
-			RelatedEntityID: toString(relatedNode["Id"]),
-			Name:            relName,
-			StartTime:       toString(relNode["Created"]),
+			RelatedEntityID: toStringPtr(relatedNode["Id"]),
+			Name:            toStringPtr(relName),
+			StartTime:       toStringPtr(relNode["Created"]),
 			EndTime:         toStringPtr(relNode["Terminated"]),
-			Direction:       "OUTGOING", // Since we're going from e to related
+			Direction:       toStringPtr("OUTGOING"), // Since we're going from e to related
 
 			// Instead of setting Entity here, we'll let the Entities resolver handle it
 		})
@@ -165,7 +164,7 @@ func (r *queryResolver) Entities(ctx context.Context, entitiesFilter *model.Enti
 func (r *relationshipResolver) Entities(ctx context.Context, obj *model.Relationship, entitiesFilter *model.EntityInput) ([]*model.Entity, error) {
 	// Create a filter that includes the related entity ID
 	entityFilter := &model.EntityInput{
-		ID: &obj.RelatedEntityID,
+		ID: obj.RelatedEntityID,
 	}
 
 	// If additional filters are provided, merge them
@@ -202,13 +201,6 @@ func (r *Resolver) Relationship() RelationshipResolver { return &relationshipRes
 type entityResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
 type relationshipResolver struct{ *Resolver }
-
-// !!! WARNING !!!
-// The code below was going to be deleted when updating resolvers. It has been copied here so you have
-// one last chance to move it out of harms way if you want. There are two reasons this happens:
-//  - When renaming or deleting a resolver the old code will be put in here. You can safely delete
-//    it when you're done.
-//  - You have helper methods in this file. Move them out to keep these resolver files clean.
 
 func nilIfEmpty(s *string) any {
 	if s == nil || *s == "" {
@@ -284,25 +276,17 @@ func toStringPtr(v any) *string {
 	s := toString(v)
 	return &s
 }
-func toTimePtr(v any) *time.Time {
-	if v == nil {
-		return nil
-	}
-	if t, ok := v.(time.Time); ok {
-		return &t
-	}
-	return nil
-}
+
 func mapEntityNode(props map[string]interface{}) *model.Entity {
 	return &model.Entity{
-		ID: toString(props["Id"]),
+		ID: toStringPtr(props["Id"]),
 		Kind: &model.Kind{
-			Major: toString(props["MajorKind"]),
-			Minor: toString(props["MinorKind"]),
+			Major: toStringPtr(props["MajorKind"]),
+			Minor: toStringPtr(props["MinorKind"]),
 		},
 		Name: &model.TimeBasedValue{
 			Value:     props["Name"],
-			StartTime: toString(props["Created"]),
+			StartTime: toStringPtr(props["Created"]),
 			EndTime:   nil, // No end time in your data
 		},
 		Created:    toStringPtr(props["Created"]),

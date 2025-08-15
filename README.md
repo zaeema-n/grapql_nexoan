@@ -1,3 +1,5 @@
+# Nexoan with GraphQL PoC
+
 When you update the schema, run the following,
 
 ```bash
@@ -29,7 +31,7 @@ query {
 }
 ```
 
-Try Try running the following query in graphiql to test the Entities query with relationships
+Try running the following query in graphiql to test the Entities query with relationships
 
 ```bash
 query {
